@@ -4,5 +4,4 @@ __pycache__
 .git
 .gitignore
 README.md
-docker-compose.yml
 *.log
