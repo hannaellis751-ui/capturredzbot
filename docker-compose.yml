@@ -1,16 +1,1 @@
-version: '3.8'
 
-services:
-  bot:
-    build: .
-    container_name: capturredzbot
-    restart: unless-stopped
-    environment:
-      - API_ID=${API_ID}
-      - API_HASH=${API_HASH}
-      - BOT_TOKEN=${BOT_TOKEN}
-      - SESSION=${SESSION}
-      - AUTH=${AUTH}
-      - FORCESUB=${FORCESUB}
-    volumes:
-      - ./logs:/app/logs
