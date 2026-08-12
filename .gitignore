@@ -1,44 +1,28 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
 env/
 venv/
 ENV/
 .venv/
-*.egg-info/
-dist/
-build/
+
+# Environment variables - CRITICAL: Never commit these!
+.env
+.env.*
+*.env
 
 # Session files
 *.session
 *.session-journal
-
-# Environment variables
-.env
-.env.local
-.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-
-# Logs
-logs/
-*.log
-
-# Railway
-railway.json
-*.railway
-
-# Docker
-.dockerignore
-docker-compose.override.yml
 
 # OS
 .DS_Store
