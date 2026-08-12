@@ -1,7 +1,6 @@
 """
 @capturredzbot - Professional Telegram Content Capture Bot
 Version: 2.0.0
-Author: Senior Developer
 Description: Fetches content from protected Telegram channels
 """
 
@@ -11,7 +10,6 @@ import asyncio
 import logging
 import sys
 from typing import Optional, Tuple, List
-from datetime import datetime
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
@@ -187,15 +185,7 @@ class LinkExtractor:
     
     @staticmethod
     def extract_link_info(link: str) -> Tuple[Optional[str], Optional[int]]:
-        """
-        Extract chat identifier and message ID from a Telegram link.
-        
-        Args:
-            link: Telegram message link (e.g., https://t.me/channel/123)
-            
-        Returns:
-            Tuple of (chat_identifier, message_id) or (None, None)
-        """
+        """Extract chat identifier and message ID from a Telegram link."""
         patterns = [
             r'https?://(?:t\.me|telegram\.me)/(?:c/)?([^/]+)/(\d+)',
             r'https?://(?:t\.me|telegram\.me)/([^/]+)/(\d+)'
@@ -227,7 +217,6 @@ class BotHandlers:
         """Register all message handlers."""
         bot = self.clients.bot_client
         
-        # Command handlers
         @bot.on_message(filters.command("start") & filters.private)
         async def start_command(client, message: Message):
             await self.start_command(client, message)
@@ -244,12 +233,10 @@ class BotHandlers:
         async def batch_command(client, message: Message):
             await self.batch_command(client, message)
         
-        # Callback query handler
         @bot.on_callback_query(filters.regex("check_sub"))
         async def check_sub_callback(client, callback_query: CallbackQuery):
             await self.check_sub_callback(client, callback_query)
         
-        # Message handler for links
         @bot.on_message(filters.private & filters.text & ~filters.command(["start", "help", "stats", "batch"]))
         async def handle_message(client, message: Message):
             await self.handle_message(client, message)
@@ -273,14 +260,13 @@ class BotHandlers:
             return False
         except Exception as e:
             logger.error(f"Subscription check error: {e}")
-            return True  # Allow access on error
+            return True
     
     async def start_command(self, client, message: Message):
         """Handle /start command."""
         user_id = message.from_user.id
         user_name = message.from_user.first_name or "User"
         
-        # Check subscription
         if Config.FORCESUB and not await self.check_subscription(user_id):
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{Config.FORCESUB}")],
@@ -297,7 +283,6 @@ class BotHandlers:
             )
             return
         
-        # Welcome message
         await message.reply_text(
             f"**👋 Hello {user_name}!**\n\n"
             f"I can fetch content from protected Telegram channels.\n\n"
@@ -370,7 +355,7 @@ class BotHandlers:
                 processed += 1
             else:
                 failed += 1
-            await asyncio.sleep(0.5)  # Rate limiting
+            await asyncio.sleep(0.5)
         
         await status_msg.edit_text(
             f"✅ **Batch Complete**\n\n"
@@ -396,31 +381,19 @@ class BotHandlers:
             )
     
     async def process_single_link(self, link: str, user_id: int) -> bool:
-        """
-        Process a single Telegram link and send content to user.
-        
-        Args:
-            link: Telegram message link
-            user_id: User to send content to
-            
-        Returns:
-            bool: Success status
-        """
-        # Extract link info
+        """Process a single Telegram link and send content to user."""
         chat_id, msg_id = LinkExtractor.extract_link_info(link)
         if not chat_id or not msg_id:
             logger.warning(f"Invalid link format: {link}")
             return False
         
         try:
-            # Fetch message using user client
             message = await self.clients.user_client.get_messages(chat_id, msg_id)
             
             if not message or message.empty:
                 logger.warning(f"Message not found: {chat_id}/{msg_id}")
                 return False
             
-            # Send to user
             if message.media:
                 await message.copy(
                     chat_id=user_id,
@@ -453,7 +426,6 @@ class BotHandlers:
         """Handle regular messages with links."""
         user_id = message.from_user.id
         
-        # Check subscription
         if Config.FORCESUB and not await self.check_subscription(user_id):
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{Config.FORCESUB}")]
@@ -465,7 +437,6 @@ class BotHandlers:
             )
             return
         
-        # Extract links
         links = LinkExtractor.extract_all_links(message.text)
         
         if not links:
@@ -476,7 +447,6 @@ class BotHandlers:
             )
             return
         
-        # Process links
         status_msg = await message.reply_text(f"⏳ Processing {len(links)} link(s)...")
         
         successful = 0
@@ -505,25 +475,19 @@ class BotApplication:
     async def run(self):
         """Start and run the bot application."""
         try:
-            # Load configuration
             if not Config.load():
                 sys.exit(1)
             
-            # Initialize clients
             if not await self.clients.initialize():
                 sys.exit(1)
             
-            # Setup handlers
             self.handlers = BotHandlers(self.clients)
             
-            # Start clients
             if not await self.clients.start():
                 sys.exit(1)
             
-            # Display startup banner
             self.display_banner()
             
-            # Keep running
             await asyncio.Event().wait()
             
         except KeyboardInterrupt:
