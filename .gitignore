@@ -9,7 +9,7 @@ venv/
 ENV/
 .venv/
 
-# Environment variables
+# Environment variables - NEVER commit these!
 .env
 .env.*
 *.env
