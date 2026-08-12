@@ -14,39 +14,84 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============= ENVIRONMENT VARIABLES =============
-try:
-    API_ID = int(os.environ.get("API_ID", 0))
-    API_HASH = os.environ.get("API_HASH", "")
-    BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
-    SESSION = os.environ.get("SESSION", "")
-    AUTH = int(os.environ.get("AUTH", 0))
-    FORCESUB = os.environ.get("FORCESUB", None)
-    
-    # Validate required variables
-    if not all([API_ID, API_HASH, BOT_TOKEN, SESSION, AUTH]):
-        raise ValueError("Missing required environment variables!")
-        
-except ValueError as e:
-    logger.error(f"Environment variable error: {e}")
+def get_env_var(var_name: str, required: bool = True, default: str = None):
+    """Get environment variable with proper error handling."""
+    value = os.environ.get(var_name)
+    if required and (value is None or value.strip() == ""):
+        logger.error(f"❌ Missing required environment variable: {var_name}")
+        return None
+    return value if value and value.strip() != "" else default
+
+# Get all variables
+API_ID = get_env_var("API_ID")
+API_HASH = get_env_var("API_HASH")
+BOT_TOKEN = get_env_var("BOT_TOKEN")
+SESSION = get_env_var("SESSION")
+AUTH = get_env_var("AUTH")
+FORCESUB = get_env_var("FORCESUB", required=False, default=None)
+
+# Convert numeric variables
+if API_ID:
+    try:
+        API_ID = int(API_ID)
+    except ValueError:
+        logger.error("❌ API_ID must be a number")
+        API_ID = None
+
+if AUTH:
+    try:
+        AUTH = int(AUTH)
+    except ValueError:
+        logger.error("❌ AUTH must be a number")
+        AUTH = None
+
+# Validate all required variables
+missing_vars = []
+if API_ID is None:
+    missing_vars.append("API_ID")
+if API_HASH is None:
+    missing_vars.append("API_HASH")
+if BOT_TOKEN is None:
+    missing_vars.append("BOT_TOKEN")
+if SESSION is None:
+    missing_vars.append("SESSION")
+if AUTH is None:
+    missing_vars.append("AUTH")
+
+if missing_vars:
+    logger.error(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
+    logger.error("💡 Please add these variables in Railway dashboard")
     exit(1)
+
+logger.info("✅ All required environment variables are set")
 
 # ============= INITIALIZE CLIENTS =============
 # User client - uses your account to access restricted content
-user_client = Client(
-    "user",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    session_string=SESSION,
-    in_memory=True
-)
+try:
+    user_client = Client(
+        "user",
+        api_id=API_ID,
+        api_hash=API_HASH,
+        session_string=SESSION,
+        in_memory=True
+    )
+    logger.info("✅ User client initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize user client: {e}")
+    exit(1)
 
 # Bot client - handles user interactions
-bot_client = Client(
-    "capturredzbot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
+try:
+    bot_client = Client(
+        "capturredzbot",
+        api_id=API_ID,
+        api_hash=API_HASH,
+        bot_token=BOT_TOKEN
+    )
+    logger.info("✅ Bot client initialized")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize bot client: {e}")
+    exit(1)
 
 # ============= FORCE SUBSCRIPTION CHECK =============
 async def is_subscribed(user_id: int) -> bool:
@@ -70,7 +115,6 @@ async def start_command(client, message):
     user_id = message.from_user.id
     user_name = message.from_user.first_name or "User"
 
-    # Force subscribe check
     if FORCESUB and not await is_subscribed(user_id):
         btn = [
             [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{FORCESUB}")],
@@ -246,7 +290,7 @@ async def handle_message(client, message):
 async def stats_command(client, message):
     await message.reply_text(
         "📊 **Bot Status**\n\n"
-        "✅ Bot is running smoothly!\n"
+        "✅ Bot is running successfully!\n"
         f"👑 Owner ID: `{AUTH}`\n"
         f"📢 Force Subscribe: `{FORCESUB if FORCESUB else 'Disabled'}`\n"
         f"🤖 Bot Username: @capturredzbot",
@@ -277,21 +321,25 @@ async def help_command(client, message):
 async def main():
     """Start both clients concurrently."""
     try:
+        logger.info("🚀 Starting clients...")
+        
         await user_client.start()
         logger.info("✅ User client started successfully")
         
         await bot_client.start()
         logger.info("✅ Bot client started successfully")
         
+        logger.info("=" * 50)
         logger.info("🤖 @capturredzbot is running!")
         logger.info(f"👑 Owner ID: {AUTH}")
         logger.info(f"📢 Force Subscribe: {FORCESUB if FORCESUB else 'Disabled'}")
         logger.info("💡 Send /start to @capturredzbot on Telegram to test")
+        logger.info("=" * 50)
         
         await asyncio.Event().wait()
         
     except Exception as e:
-        logger.error(f"Failed to start bot: {e}")
+        logger.error(f"❌ Failed to start bot: {e}")
         raise
     finally:
         await user_client.stop()
@@ -301,7 +349,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Bot stopped by user")
+        logger.info("🛑 Bot stopped by user")
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
+        logger.error(f"❌ Fatal error: {e}")
         exit(1)
