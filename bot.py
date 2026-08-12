@@ -25,7 +25,7 @@ def get_env(name, default=None):
         return default
     return value.strip()
 
-# Load all variables with debugging
+# Load all variables
 logger.info("=" * 50)
 logger.info("🔍 Loading environment variables...")
 
@@ -36,7 +36,7 @@ SESSION = get_env("SESSION")
 AUTH = get_env("AUTH")
 FORCESUB = get_env("FORCESUB", default=None)
 
-# Debug: Show which variables are loaded
+# Debug
 logger.info(f"API_ID: {'✅ Loaded' if API_ID else '❌ Missing'}")
 logger.info(f"API_HASH: {'✅ Loaded' if API_HASH else '❌ Missing'}")
 logger.info(f"BOT_TOKEN: {'✅ Loaded' if BOT_TOKEN else '❌ Missing'}")
@@ -75,19 +75,23 @@ logger.info("=" * 50)
 
 # ============ INITIALIZE CLIENTS ============
 try:
+    # User client - using session string
     user_client = Client(
         "user",
         api_id=API_ID,
         api_hash=API_HASH,
         session_string=SESSION,
-        in_memory=True
+        in_memory=True,
+        sleep_threshold=30
     )
     
+    # Bot client
     bot_client = Client(
         "bot",
         api_id=API_ID,
         api_hash=API_HASH,
-        bot_token=BOT_TOKEN
+        bot_token=BOT_TOKEN,
+        sleep_threshold=30
     )
     logger.info("✅ Clients initialized")
 except Exception as e:
