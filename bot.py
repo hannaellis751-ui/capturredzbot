@@ -1,21 +1,34 @@
 import os
 import re
 import asyncio
+import logging
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant, FloodWait
-import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # ============= ENVIRONMENT VARIABLES =============
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-SESSION = os.environ.get("SESSION")          # Pyrogram session string for user client
-AUTH = int(os.environ.get("AUTH"))            # Owner user ID
-FORCESUB = os.environ.get("FORCESUB")         # Optional: channel username without '@'
+try:
+    API_ID = int(os.environ.get("API_ID", 0))
+    API_HASH = os.environ.get("API_HASH", "")
+    BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+    SESSION = os.environ.get("SESSION", "")
+    AUTH = int(os.environ.get("AUTH", 0))
+    FORCESUB = os.environ.get("FORCESUB", None)
+    
+    # Validate required variables
+    if not all([API_ID, API_HASH, BOT_TOKEN, SESSION, AUTH]):
+        raise ValueError("Missing required environment variables!")
+        
+except ValueError as e:
+    logger.error(f"Environment variable error: {e}")
+    exit(1)
 
 # ============= INITIALIZE CLIENTS =============
 # User client - uses your account to access restricted content
@@ -41,17 +54,21 @@ async def is_subscribed(user_id: int) -> bool:
     if not FORCESUB:
         return True
     try:
-        await bot_client.get_chat_member(FORCESUB, user_id)
-        return True
+        member = await bot_client.get_chat_member(FORCESUB, user_id)
+        return member.status in [enums.ChatMemberStatus.OWNER, 
+                                  enums.ChatMemberStatus.ADMINISTRATOR,
+                                  enums.ChatMemberStatus.MEMBER]
     except UserNotParticipant:
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"Subscription check error: {e}")
         return True  # If bot can't check, allow access
 
 # ============= BOT COMMANDS =============
 @bot_client.on_message(filters.command("start") & filters.private)
 async def start_command(client, message):
     user_id = message.from_user.id
+    user_name = message.from_user.first_name or "User"
 
     # Force subscribe check
     if FORCESUB and not await is_subscribed(user_id):
@@ -61,7 +78,7 @@ async def start_command(client, message):
         ]
         await message.reply_text(
             f"**🚫 Access Restricted**\n\n"
-            f"Dear {message.from_user.first_name},\n"
+            f"Dear {user_name},\n"
             f"You must join our channel to use this bot.\n\n"
             f"👆 Tap the button below to join, then check subscription.",
             reply_markup=InlineKeyboardMarkup(btn),
@@ -70,7 +87,7 @@ async def start_command(client, message):
         return
 
     await message.reply_text(
-        f"**👋 Hello {message.from_user.first_name}!**\n\n"
+        f"**👋 Hello {user_name}!**\n\n"
         f"I can fetch content from protected Telegram channels.\n\n"
         f"**How to use:**\n"
         f"• Send me a message link like:\n"
@@ -87,7 +104,8 @@ async def check_sub_callback(client, callback_query):
 
     if await is_subscribed(user_id):
         await callback_query.message.edit_text(
-            "✅ **Subscription verified!**\n\nYou can now use the bot. Send me any Telegram message link!",
+            "✅ **Subscription verified!**\n\n"
+            "You can now use the bot. Send me any Telegram message link!",
             parse_mode=enums.ParseMode.MARKDOWN
         )
     else:
@@ -106,7 +124,11 @@ async def batch_command(client, message):
     # Expect: /batch link1 link2 link3 ...
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        await message.reply_text("Usage: `/batch link1 link2 link3 ...`")
+        await message.reply_text(
+            "**Usage:** `/batch link1 link2 link3 ...`\n\n"
+            "Example: `/batch https://t.me/channel/123 https://t.me/channel/456`",
+            parse_mode=enums.ParseMode.MARKDOWN
+        )
         return
 
     links = args[1].split()
@@ -146,6 +168,7 @@ async def process_single_link(link: str, user_id: int) -> bool:
     """Fetch a single message via user_client and forward/send it via bot_client."""
     chat_identifier, msg_id = extract_link_info(link)
     if not chat_identifier or not msg_id:
+        logger.warning(f"Invalid link format: {link}")
         return False
 
     try:
@@ -153,21 +176,36 @@ async def process_single_link(link: str, user_id: int) -> bool:
         message = await user_client.get_messages(chat_identifier, msg_id)
 
         if not message or message.empty:
+            logger.warning(f"Message not found: {chat_identifier}/{msg_id}")
             return False
 
         # Send the message using the bot client
-        await message.copy(
-            chat_id=user_id,
-            caption=message.caption if hasattr(message, 'caption') else None,
-            parse_mode=enums.ParseMode.HTML if message.caption else None
-        )
-        return True
+        try:
+            if message.media:
+                # For media messages, use copy with caption
+                await message.copy(
+                    chat_id=user_id,
+                    caption=message.caption or "",
+                    parse_mode=enums.ParseMode.HTML if message.caption else None
+                )
+            else:
+                # For text messages
+                await bot_client.send_message(
+                    chat_id=user_id,
+                    text=message.text or "Empty message",
+                    parse_mode=enums.ParseMode.HTML if message.text else None
+                )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send message to user {user_id}: {e}")
+            return False
 
     except FloodWait as e:
+        logger.warning(f"Flood wait: {e.value} seconds")
         await asyncio.sleep(e.value)
         return await process_single_link(link, user_id)  # Retry after waiting
     except Exception as e:
-        logging.error(f"Error processing {link}: {e}")
+        logger.error(f"Error processing {link}: {e}")
         return False
 
 @bot_client.on_message(filters.private & filters.text & ~filters.command(["start", "batch"]))
@@ -193,7 +231,8 @@ async def handle_message(client, message):
     if not links:
         await message.reply_text(
             "❌ No valid Telegram message links found.\n"
-            "Send a link like: `https://t.me/channel_name/123`"
+            "Send a link like: `https://t.me/channel_name/123`",
+            parse_mode=enums.ParseMode.MARKDOWN
         )
         return
 
@@ -209,32 +248,79 @@ async def handle_message(client, message):
         f"✅ **Done!**\n\n"
         f"✓ Successfully retrieved: {successful}\n"
         f"✗ Failed: {len(links) - successful}\n\n"
-        f"Send more links anytime!"
+        f"Send more links anytime!",
+        parse_mode=enums.ParseMode.MARKDOWN
     )
 
 # ============= BOT ADMIN COMMANDS =============
 @bot_client.on_message(filters.command("stats") & filters.user(AUTH))
 async def stats_command(client, message):
-    await message.reply_text("📊 Bot is running smoothly! (Stats feature coming soon)")
+    await message.reply_text(
+        "📊 **Bot Status**\n\n"
+        "✅ Bot is running smoothly!\n"
+        f"👑 Owner ID: `{AUTH}`\n"
+        f"📢 Force Subscribe: `{FORCESUB if FORCESUB else 'Disabled'}`\n"
+        f"🤖 Bot Username: @capturredzbot",
+        parse_mode=enums.ParseMode.MARKDOWN
+    )
 
 @bot_client.on_message(filters.command("broadcast") & filters.user(AUTH))
 async def broadcast_command(client, message):
     """Owner-only broadcast (requires additional setup for user list)."""
-    await message.reply_text("📢 Broadcast feature - implement with database if needed.")
+    await message.reply_text("📢 Broadcast feature coming soon!")
+
+# ============= ERROR HANDLING =============
+@bot_client.on_message(filters.command("help") & filters.private)
+async def help_command(client, message):
+    await message.reply_text(
+        "**📚 Help Guide**\n\n"
+        "**Commands:**\n"
+        "/start - Start the bot\n"
+        "/help - Show this help message\n"
+        "/stats - Bot statistics (Owner only)\n"
+        "/batch - Process multiple links (Owner only)\n\n"
+        "**How to use:**\n"
+        "1. Send me a Telegram message link\n"
+        "2. I'll fetch the content for you\n"
+        "3. Works with protected channels too!\n\n"
+        "**Link Format:**\n"
+        "`https://t.me/channel_name/123`\n"
+        "`https://t.me/c/1234567890/123`\n\n"
+        "**Note:** I can fetch text, photos, videos, documents, and audio.",
+        parse_mode=enums.ParseMode.MARKDOWN
+    )
 
 # ============= RUN CLIENTS =============
 async def main():
     """Start both clients concurrently."""
-    # Start both clients
-    await user_client.start()
-    await bot_client.start()
-
-    logging.info("🤖 Bot is running!")
-    logging.info(f"👑 Owner ID: {AUTH}")
-    logging.info(f"📢 Force Subscribe: {FORCESUB if FORCESUB else 'Disabled'}")
-
-    # Keep running
-    await asyncio.Event().wait()
+    try:
+        # Start both clients
+        await user_client.start()
+        logger.info("✅ User client started successfully")
+        
+        await bot_client.start()
+        logger.info("✅ Bot client started successfully")
+        
+        logger.info("🤖 @capturredzbot is running!")
+        logger.info(f"👑 Owner ID: {AUTH}")
+        logger.info(f"📢 Force Subscribe: {FORCESUB if FORCESUB else 'Disabled'}")
+        logger.info("💡 Send /start to @capturredzbot on Telegram to test")
+        
+        # Keep running
+        await asyncio.Event().wait()
+        
+    except Exception as e:
+        logger.error(f"Failed to start bot: {e}")
+        raise
+    finally:
+        await user_client.stop()
+        await bot_client.stop()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        exit(1)
