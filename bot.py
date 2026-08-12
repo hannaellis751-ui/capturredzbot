@@ -7,7 +7,6 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant, FloodWait
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -18,15 +17,6 @@ logger = logging.getLogger(__name__)
 logger.info("=" * 60)
 logger.info("🔍 Loading environment variables...")
 
-# DEBUG: Print all environment variables
-logger.info("📋 All environment variables:")
-for key in sorted(os.environ.keys()):
-    if key not in ['SESSION', 'API_HASH', 'BOT_TOKEN']:
-        logger.info(f"   {key} = {os.environ.get(key)}")
-    else:
-        logger.info(f"   {key} = [HIDDEN]")
-
-# Load variables
 API_ID = os.environ.get("API_ID")
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -34,8 +24,6 @@ SESSION = os.environ.get("SESSION")
 AUTH = os.environ.get("AUTH")
 FORCESUB = os.environ.get("FORCESUB")
 
-# Show status
-logger.info("-" * 60)
 logger.info(f"API_ID: {'✅ Loaded' if API_ID else '❌ Missing'}")
 logger.info(f"API_HASH: {'✅ Loaded' if API_HASH else '❌ Missing'}")
 logger.info(f"BOT_TOKEN: {'✅ Loaded' if BOT_TOKEN else '❌ Missing'}")
@@ -43,7 +31,6 @@ logger.info(f"SESSION: {'✅ Loaded' if SESSION else '❌ Missing'}")
 logger.info(f"AUTH: {'✅ Loaded' if AUTH else '❌ Missing'}")
 logger.info(f"FORCESUB: {FORCESUB if FORCESUB else 'Not Set'}")
 
-# Validate
 missing = []
 if not API_ID:
     missing.append("API_ID")
@@ -58,11 +45,8 @@ if not AUTH:
 
 if missing:
     logger.error(f"❌ Missing variables: {', '.join(missing)}")
-    logger.error("💡 Please add these in Railway dashboard")
-    logger.info("=" * 60)
     sys.exit(1)
 
-# Convert types
 try:
     API_ID = int(API_ID)
     AUTH = int(AUTH)
@@ -94,6 +78,7 @@ try:
     logger.info("✅ Clients initialized")
 except Exception as e:
     logger.error(f"❌ Client initialization error: {e}")
+    logger.error("💡 Your SESSION may be invalid. Generate a new one!")
     sys.exit(1)
 
 # ============ HELPER FUNCTIONS ============
