@@ -62,7 +62,7 @@ async def is_subscribed(user_id: int) -> bool:
         return False
     except Exception as e:
         logger.error(f"Subscription check error: {e}")
-        return True  # If bot can't check, allow access
+        return True
 
 # ============= BOT COMMANDS =============
 @bot_client.on_message(filters.command("start") & filters.private)
@@ -121,7 +121,6 @@ async def batch_command(client, message):
         await message.reply_text("⛔ This command is for the bot owner only.")
         return
 
-    # Expect: /batch link1 link2 link3 ...
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply_text(
@@ -142,7 +141,7 @@ async def batch_command(client, message):
             processed += 1
         else:
             failed += 1
-        await asyncio.sleep(0.5)  # Avoid flood wait
+        await asyncio.sleep(0.5)
 
     await status_msg.edit_text(
         f"✅ **Batch Complete**\n\n"
@@ -153,11 +152,7 @@ async def batch_command(client, message):
 
 # ============= LINK PROCESSING =============
 def extract_link_info(link: str) -> tuple:
-    """
-    Extract channel/chat and message ID from a Telegram link.
-    Returns (chat_identifier, message_id) or (None, None) on failure.
-    """
-    # Pattern for: https://t.me/username/123 or https://telegram.me/c/1234567890/123
+    """Extract channel/chat and message ID from a Telegram link."""
     pattern = r'https?://(?:t\.me|telegram\.me)/(?:c/)?([^/]+)/(\d+)'
     match = re.search(pattern, link)
     if match:
@@ -165,31 +160,27 @@ def extract_link_info(link: str) -> tuple:
     return None, None
 
 async def process_single_link(link: str, user_id: int) -> bool:
-    """Fetch a single message via user_client and forward/send it via bot_client."""
+    """Fetch a single message via user_client and send it via bot_client."""
     chat_identifier, msg_id = extract_link_info(link)
     if not chat_identifier or not msg_id:
         logger.warning(f"Invalid link format: {link}")
         return False
 
     try:
-        # Use user client to get the message (bypasses restrictions)
         message = await user_client.get_messages(chat_identifier, msg_id)
 
         if not message or message.empty:
             logger.warning(f"Message not found: {chat_identifier}/{msg_id}")
             return False
 
-        # Send the message using the bot client
         try:
             if message.media:
-                # For media messages, use copy with caption
                 await message.copy(
                     chat_id=user_id,
                     caption=message.caption or "",
                     parse_mode=enums.ParseMode.HTML if message.caption else None
                 )
             else:
-                # For text messages
                 await bot_client.send_message(
                     chat_id=user_id,
                     text=message.text or "Empty message",
@@ -203,7 +194,7 @@ async def process_single_link(link: str, user_id: int) -> bool:
     except FloodWait as e:
         logger.warning(f"Flood wait: {e.value} seconds")
         await asyncio.sleep(e.value)
-        return await process_single_link(link, user_id)  # Retry after waiting
+        return await process_single_link(link, user_id)
     except Exception as e:
         logger.error(f"Error processing {link}: {e}")
         return False
@@ -213,7 +204,6 @@ async def handle_message(client, message):
     """Handle regular messages containing links."""
     user_id = message.from_user.id
 
-    # Force subscribe check
     if FORCESUB and not await is_subscribed(user_id):
         btn = [[InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{FORCESUB}")]]
         await message.reply_text(
@@ -224,7 +214,6 @@ async def handle_message(client, message):
         return
 
     text = message.text
-    # Extract all links from the message
     link_pattern = r'https?://(?:t\.me|telegram\.me)/(?:c/)?[^/\s]+/\d+'
     links = re.findall(link_pattern, text)
 
@@ -264,12 +253,6 @@ async def stats_command(client, message):
         parse_mode=enums.ParseMode.MARKDOWN
     )
 
-@bot_client.on_message(filters.command("broadcast") & filters.user(AUTH))
-async def broadcast_command(client, message):
-    """Owner-only broadcast (requires additional setup for user list)."""
-    await message.reply_text("📢 Broadcast feature coming soon!")
-
-# ============= ERROR HANDLING =============
 @bot_client.on_message(filters.command("help") & filters.private)
 async def help_command(client, message):
     await message.reply_text(
@@ -294,7 +277,6 @@ async def help_command(client, message):
 async def main():
     """Start both clients concurrently."""
     try:
-        # Start both clients
         await user_client.start()
         logger.info("✅ User client started successfully")
         
@@ -306,7 +288,6 @@ async def main():
         logger.info(f"📢 Force Subscribe: {FORCESUB if FORCESUB else 'Disabled'}")
         logger.info("💡 Send /start to @capturredzbot on Telegram to test")
         
-        # Keep running
         await asyncio.Event().wait()
         
     except Exception as e:
