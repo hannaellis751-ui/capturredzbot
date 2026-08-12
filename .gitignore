@@ -7,7 +7,10 @@ __pycache__/
 env/
 venv/
 ENV/
-.venv
+.venv/
+*.egg-info/
+dist/
+build/
 
 # Session files
 *.session
@@ -16,12 +19,27 @@ ENV/
 # Environment variables
 .env
 .env.local
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# Logs
+logs/
+*.log
 
 # Railway
 railway.json
+*.railway
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
